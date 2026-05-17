@@ -1,0 +1,6 @@
+.env
+traefik-data/
+nextcloud-data/
+nextcloud-config/
+nextcloud-db/
+hass-config/

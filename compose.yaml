@@ -1,0 +1,79 @@
+services:
+  traefik:
+    container_name: traefik
+    image: docker.io/library/traefik:v3
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /home/brad/homelab/traefik-data:/data
+    command:
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.letsencrypt.acme.storage=/data/acme.json
+    networks:
+      - nextcloud
+    restart: unless-stopped
+
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    volumes:
+      - /home/brad/homelab/hass-config:/config:Z
+      - /etc/localtime:/etc/localtime:ro
+    # For initial setup, host networking lets HA auto-discover local smart devices effortlessly
+    network_mode: host
+    restart: unless-stopped
+
+  mariadb:
+    container_name: nextcloud-db
+    image: docker.io/library/mariadb:lts
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - /home/brad/homelab/nextcloud-db:/var/lib/mysql:Z
+    networks:
+      - nextcloud
+    restart: unless-stopped
+
+  nextcloud:
+    container_name: nextcloud-app
+    image: docker.io/library/nextcloud:33
+    environment:
+      MYSQL_HOST: mariadb
+      MYSQL_DATABASE: nextcloud
+      MYSQL_USER: nextcloud
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_DOMAIN}
+      TRUSTED_PROXIES: traefik
+      OVERWRITEHOST: ${NEXTCLOUD_DOMAIN}
+      OVERWRITEPROTOCOL: https
+    volumes:
+      - /home/brad/homelab/nextcloud-config:/var/www/html:Z
+      - /home/brad/homelab/nextcloud-data:/var/www/html/data:Z
+    networks:
+      - nextcloud
+    depends_on:
+      - mariadb
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nextcloud.rule=Host(`${NEXTCLOUD_DOMAIN}`)"
+      - "traefik.http.routers.nextcloud.entrypoints=websecure"
+      - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
+      - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+    restart: unless-stopped
+
+networks:
+  nextcloud:

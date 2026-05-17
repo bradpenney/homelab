@@ -1,0 +1,6 @@
+[Unit]
+Description=Notify on Nextcloud backup failure
+
+[Service]
+Type=oneshot
+ExecStart=/home/brad/homelab/notify.sh "Nextcloud Backup Failed" "Backup failed on %H. Check: journalctl -u nextcloud-backup.service -n 50"
