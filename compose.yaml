@@ -33,6 +33,14 @@ services:
     network_mode: host
     restart: unless-stopped
 
+  redis:
+    container_name: nextcloud-redis
+    image: docker.io/library/redis:alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    networks:
+      - nextcloud
+    restart: unless-stopped
+
   mariadb:
     container_name: nextcloud-db
     image: docker.io/library/mariadb:lts
@@ -56,9 +64,11 @@ services:
       MYSQL_USER: nextcloud
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       NEXTCLOUD_TRUSTED_DOMAINS: ${NEXTCLOUD_DOMAIN}
-      TRUSTED_PROXIES: traefik
+      TRUSTED_PROXIES: 172.18.0.0/16
       OVERWRITEHOST: ${NEXTCLOUD_DOMAIN}
       OVERWRITEPROTOCOL: https
+      PHP_UPLOAD_LIMIT: 10G
+      PHP_MEMORY_LIMIT: 512M
     volumes:
       - /home/brad/homelab/nextcloud-config:/var/www/html:Z
       - /home/brad/homelab/nextcloud-data:/var/www/html/data:Z
@@ -67,13 +77,31 @@ services:
     depends_on:
       - mariadb
       - traefik
+      - redis
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.nextcloud.rule=Host(`${NEXTCLOUD_DOMAIN}`)"
       - "traefik.http.routers.nextcloud.entrypoints=websecure"
       - "traefik.http.routers.nextcloud.tls.certresolver=letsencrypt"
       - "traefik.http.services.nextcloud.loadbalancer.server.port=80"
+      - "traefik.http.routers.nextcloud.middlewares=nextcloud-headers,nextcloud-caldav"
+      # Security headers
+      - "traefik.http.middlewares.nextcloud-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.nextcloud-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.nextcloud-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.nextcloud-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.nextcloud-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.nextcloud-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.nextcloud-headers.headers.referrerPolicy=no-referrer"
+      - "traefik.http.middlewares.nextcloud-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
+      # .well-known redirects for CalDAV/CardDAV
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.permanent=true"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.regex=^https://(.*)/.well-known/ca(l|rd)dav"
+      - "traefik.http.middlewares.nextcloud-caldav.redirectregex.replacement=https://$${1}/remote.php/dav/"
     restart: unless-stopped
 
 networks:
   nextcloud:
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16

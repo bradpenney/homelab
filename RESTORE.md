@@ -78,8 +78,9 @@ mkdir -p ~/homelab/nextcloud-config/config ~/homelab/nextcloud-config/custom_app
 rclone sync nextcloud-crypt:config ~/homelab/nextcloud-config/config
 rclone sync nextcloud-crypt:custom_apps ~/homelab/nextcloud-config/custom_apps
 
-# Download the database dump
-rclone copyto nextcloud-crypt:db/nextcloud-dump.sql /tmp/nextcloud-dump.sql
+# List available dumps and download the most recent
+rclone ls nextcloud-crypt:db
+rclone copyto nextcloud-crypt:db/nextcloud-dump-YYYY-MM-DD.sql.gz /tmp/nextcloud-dump.sql.gz
 ```
 
 ## Step 5 — Set up Traefik data directory
@@ -121,15 +122,15 @@ sudo docker compose up -d mariadb
 
 # Wait ~15 seconds for MariaDB to initialize, then restore the dump
 source .env
-sudo docker exec -i nextcloud-db mariadb \
+zcat /tmp/nextcloud-dump.sql.gz | sudo docker exec -i nextcloud-db mariadb \
   -u root -p"${MYSQL_ROOT_PASSWORD}" \
-  nextcloud < /tmp/nextcloud-dump.sql
+  nextcloud
 
 # Bring up the rest
 sudo docker compose up -d
 ```
 
-## Step 9 — Install DDNS and backup timers
+## Step 9 — Install DDNS, backup, and cron timers
 
 ```bash
 chmod +x ~/homelab/ddns-update.sh ~/homelab/backup.sh ~/homelab/notify.sh
@@ -141,10 +142,13 @@ sudo cp ~/homelab/ddns-vercel.timer /etc/systemd/system/
 sudo cp ~/homelab/nextcloud-backup.service /etc/systemd/system/
 sudo cp ~/homelab/nextcloud-backup.timer /etc/systemd/system/
 sudo cp ~/homelab/nextcloud-backup-notify.service /etc/systemd/system/
+sudo cp ~/homelab/nextcloud-cron.service /etc/systemd/system/
+sudo cp ~/homelab/nextcloud-cron.timer /etc/systemd/system/
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now ddns-vercel.timer
 sudo systemctl enable --now nextcloud-backup.timer
+sudo systemctl enable --now nextcloud-cron.timer
 ```
 
 Test the notification to confirm ntfy is working:

@@ -48,3 +48,7 @@ curl -sf -X POST "https://api.vercel.com/v4/domains/${DOMAIN}/records" \
 
 echo "$CURRENT_IP" > "$CACHE_FILE"
 echo "DNS updated to $CURRENT_IP"
+
+# Keep Nextcloud brute force whitelist in sync with home IP
+docker exec nextcloud-app php occ config:system:set \
+  auth.bruteforce.protection.whitelisted_ips 0 --value="$CURRENT_IP" 2>/dev/null || true

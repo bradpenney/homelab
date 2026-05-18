@@ -1,0 +1,10 @@
+[Unit]
+Description=Nextcloud background cron job
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=docker exec -u www-data nextcloud-app php /var/www/html/cron.php
+StandardOutput=journal
+StandardError=journal

@@ -4,7 +4,7 @@ set -euo pipefail
 HOMELAB_DIR="/home/brad/homelab"
 RCLONE_CONFIG="/home/brad/.config/rclone/rclone.conf"
 ENV_FILE="${HOMELAB_DIR}/.env"
-DUMP_FILE="/tmp/nextcloud-db-$(date +%Y-%m-%d).sql"
+DUMP_FILE="/tmp/nextcloud-db-$(date +%Y-%m-%d).sql.gz"
 
 source "$ENV_FILE"
 
@@ -21,7 +21,7 @@ log "Dumping database..."
 docker exec nextcloud-db mariadb-dump \
   -u nextcloud \
   -p"${MYSQL_PASSWORD}" \
-  nextcloud > "$DUMP_FILE"
+  nextcloud | gzip > "$DUMP_FILE"
 
 log "Disabling maintenance mode..."
 docker exec nextcloud-app php occ maintenance:mode --off
@@ -29,7 +29,15 @@ docker exec nextcloud-app php occ maintenance:mode --off
 trap 'rm -f "$DUMP_FILE"' EXIT
 
 log "Uploading database dump..."
-rclone --config "$RCLONE_CONFIG" copyto "$DUMP_FILE" "nextcloud-crypt:db/nextcloud-dump.sql"
+DUMP_NAME="nextcloud-dump-$(date +%Y-%m-%d).sql.gz"
+rclone --config "$RCLONE_CONFIG" copyto "$DUMP_FILE" "nextcloud-crypt:db/${DUMP_NAME}"
+
+log "Pruning old dumps (keeping 7 days)..."
+rclone --config "$RCLONE_CONFIG" ls nextcloud-crypt:db \
+  | awk '{print $2}' \
+  | sort \
+  | head -n -7 \
+  | xargs -I{} rclone --config "$RCLONE_CONFIG" deletefile "nextcloud-crypt:db/{}" 2>/dev/null || true
 
 log "Syncing data directory..."
 rclone --config "$RCLONE_CONFIG" sync \
