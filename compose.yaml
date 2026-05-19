@@ -55,6 +55,22 @@ services:
       - nextcloud
     restart: unless-stopped
 
+  collabora:
+    container_name: collabora
+    image: collabora/code:latest
+    environment:
+      - aliasgroup1=https://${NEXTCLOUD_DOMAIN}
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=true
+    networks:
+      - nextcloud
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.collabora.rule=Host(`${COLLABORA_DOMAIN}`)"
+      - "traefik.http.routers.collabora.entrypoints=websecure"
+      - "traefik.http.routers.collabora.tls.certresolver=letsencrypt"
+      - "traefik.http.services.collabora.loadbalancer.server.port=9980"
+    restart: unless-stopped
+
   nextcloud:
     container_name: nextcloud-app
     image: docker.io/library/nextcloud:33

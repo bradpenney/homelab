@@ -42,11 +42,42 @@ Backup flow: enable maintenance mode → dump MariaDB → disable maintenance mo
 ```
 Caches last known IP at `/var/cache/ddns-vercel/last-ip`. Uses Vercel DNS API: deletes the existing A record and creates a new one.
 
+### Google Calendar sync
+Two-way sync between Google Calendar and Nextcloud Calendar, running as a systemd timer every 15 minutes.
+
+Implemented in `~/notes/scripts/gcal_caldav_sync.py` using the Python `caldav` library.
+Google is authenticated via OAuth2 Bearer token (same credentials as the `gcal` CLI).
+Nextcloud is authenticated via `BRAD_NEXTCLOUD_PAT` from `.env`.
+Conflict resolution: Google wins. Syncs the primary personal calendar only.
+Deletion state is tracked in `~/.vdirsyncer/gcal_sync_state.json`.
+
+```bash
+~/homelab/gcal-sync.sh             # manual run
+journalctl -u gcal-sync.service -n 50
+sudo systemctl status gcal-sync.timer
+```
+
+**First-time setup on a new machine:**
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r gcal-requirements.txt
+# Populate .env with GOOGLE_EMAIL, GCAL_TOKEN_FILE, NEXTCLOUD_USERNAME, NEXTCLOUD_CALENDAR
+# Re-authenticate Google if token.json doesn't exist (use the gcal auth script)
+~/homelab/gcal-sync.sh             # test run
+sudo cp gcal-sync.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now gcal-sync.timer
+```
+
+**Google Cloud Console prerequisite:** The "Google Calendar CalDAV API" must be enabled in the Google Cloud project that issued `GCAL_TOKEN_FILE`. State is persisted at `~/.local/share/gcal-sync/state.json`.
+
 ### Systemd timers (production automation)
 ```bash
 sudo systemctl status nextcloud-backup.timer   # daily at 3am
 sudo systemctl status ddns-vercel.timer        # every 5 minutes
+sudo systemctl status gcal-sync.timer          # every 15 minutes
 journalctl -u nextcloud-backup.service -n 50
+journalctl -u gcal-sync.service -n 50
 ```
 On backup failure, `nextcloud-backup.service` triggers `nextcloud-backup-notify.service`, which calls `notify.sh` to push an alert via ntfy.sh.
 
@@ -54,9 +85,11 @@ On backup failure, `nextcloud-backup.service` triggers `nextcloud-backup-notify.
 ```bash
 sudo cp ddns-vercel.{service,timer} /etc/systemd/system/
 sudo cp nextcloud-backup{,-notify}.service nextcloud-backup.timer /etc/systemd/system/
+sudo cp gcal-sync.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now nextcloud-backup.timer
 sudo systemctl enable --now ddns-vercel.timer
+sudo systemctl enable --now gcal-sync.timer
 ```
 
 ## Configuration

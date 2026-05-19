@@ -1,4 +1,5 @@
 .env
+.venv/
 traefik-data/
 nextcloud-data/
 nextcloud-config/
