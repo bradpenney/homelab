@@ -6,6 +6,6 @@ OnFailure=nextcloud-backup-notify.service
 
 [Service]
 Type=oneshot
-ExecStart=/home/brad/homelab/backup.sh
+ExecStart=/bin/bash /home/brad/homelab/backup.sh
 StandardOutput=journal
 StandardError=journal

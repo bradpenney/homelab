@@ -1,0 +1,6 @@
+[Unit]
+Description=Notify on DDNS update failure
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/brad/homelab/notify.sh "DDNS Update Failed" "DNS record for nextcloud.bradpenney.io may be stale. Check: journalctl -u ddns-vercel.service -n 20"

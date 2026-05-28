@@ -6,6 +6,6 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 User=brad
-ExecStart=/home/brad/homelab/gcal-sync.sh
+ExecStart=/bin/bash /home/brad/homelab/gcal-sync.sh
 StandardOutput=journal
 StandardError=journal

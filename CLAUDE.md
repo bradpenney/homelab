@@ -38,9 +38,22 @@ Backup flow: enable maintenance mode → dump MariaDB → disable maintenance mo
 
 ### DDNS
 ```bash
-./ddns-update.sh   # manual run; only updates DNS if public IP has changed
+bash ./ddns-update.sh   # manual run; only updates DNS if public IP has changed
 ```
 Caches last known IP at `/var/cache/ddns-vercel/last-ip`. Uses Vercel DNS API: deletes the existing A record and creates a new one.
+
+On failure, `ddns-vercel.service` triggers `ddns-notify.service`, which pushes an ntfy.sh alert.
+
+### Nextcloud health check
+Polls `https://${NEXTCLOUD_DOMAIN}/status.php` every 10 minutes. Sends an ntfy.sh push on the first failure and again on recovery. State tracked at `/var/cache/nextcloud-health/state`.
+
+```bash
+sudo systemctl status nextcloud-health.timer
+sudo systemctl start nextcloud-health.service   # force an immediate check
+journalctl -u nextcloud-health.service -n 20
+```
+
+**TODO:** Add an external uptime monitor (e.g. UptimeRobot free tier) pointing at `https://nextcloud.bradpenney.io` to catch cases where the server itself is offline. The local health check cannot detect its own outage.
 
 ### Google Calendar sync
 Two-way sync between Google Calendar and Nextcloud Calendar, running as a systemd timer every 15 minutes.
@@ -76,21 +89,40 @@ sudo systemctl enable --now gcal-sync.timer
 sudo systemctl status nextcloud-backup.timer   # daily at 3am
 sudo systemctl status ddns-vercel.timer        # every 5 minutes
 sudo systemctl status gcal-sync.timer          # every 15 minutes
+sudo systemctl status nextcloud-health.timer   # every 10 minutes
 journalctl -u nextcloud-backup.service -n 50
 journalctl -u gcal-sync.service -n 50
+journalctl -u nextcloud-health.service -n 20
 ```
-On backup failure, `nextcloud-backup.service` triggers `nextcloud-backup-notify.service`, which calls `notify.sh` to push an alert via ntfy.sh.
+On backup failure, `nextcloud-backup.service` triggers `nextcloud-backup-notify.service`.
+On DDNS failure, `ddns-vercel.service` triggers `ddns-notify.service`.
+Both call `notify.sh` to push an alert via ntfy.sh.
 
 ### Installing/updating timers after editing unit files
 ```bash
 sudo cp ddns-vercel.{service,timer} /etc/systemd/system/
+sudo cp ddns-notify.service /etc/systemd/system/
 sudo cp nextcloud-backup{,-notify}.service nextcloud-backup.timer /etc/systemd/system/
 sudo cp gcal-sync.{service,timer} /etc/systemd/system/
+sudo cp nextcloud-health.{service,timer} /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now nextcloud-backup.timer
 sudo systemctl enable --now ddns-vercel.timer
 sudo systemctl enable --now gcal-sync.timer
+sudo systemctl enable --now nextcloud-health.timer
 ```
+
+### SELinux and shell scripts
+All `.sh` files in this repo must have SELinux type `bin_t` for systemd services to execute them (default `user_home_t` is blocked). A persistent policy rule is in place:
+```bash
+# Already applied — only needed on a new machine or after restorecon wipes contexts
+sudo semanage fcontext -a -t bin_t "/home/brad/homelab/.*\.sh"
+sudo restorecon -v /home/brad/homelab/*.sh
+```
+All service `ExecStart` lines use `/bin/bash /path/to/script.sh` as a second layer of defence (bash itself is always executable; only read access on the script is needed).
+
+### Docker vs Podman
+This stack is managed exclusively via **Docker** (`sudo docker compose`). Fedora also ships Podman, which is a separate engine with its own container storage. Do **not** use `podman compose` or `podman run` for this stack — Podman's rootless containers share the same volume mount paths with `:Z` SELinux relabeling, which will corrupt the SELinux labels on shared volumes and break file access for the Docker containers.
 
 ## Configuration
 
@@ -106,6 +138,10 @@ All secrets live in `.env` (gitignored). See `.env.example` for required variabl
 Two remotes must exist in `~/.config/rclone/rclone.conf`:
 - `gdrive` — Google Drive OAuth remote pointing to `nextcloud-backup/` folder
 - `nextcloud-crypt` — crypt remote wrapping `gdrive:nextcloud-backup`, used by `backup.sh`
+
+## Nextcloud MCP
+
+The `aiquila` MCP server (for browsing/editing Nextcloud files from Claude Code) is configured in the `~/notes` project, not here. Set it up there when working on a new machine.
 
 ## Disaster recovery
 
