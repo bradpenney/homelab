@@ -55,6 +55,40 @@ journalctl -u nextcloud-health.service -n 20
 
 **TODO:** Add an external uptime monitor (e.g. UptimeRobot free tier) pointing at `https://nextcloud.bradpenney.io` to catch cases where the server itself is offline. The local health check cannot detect its own outage.
 
+### Wanderer (trail journal)
+Self-hosted trail journal at `https://trails.bradpenney.io`. Three containers: `wanderer-search` (Meilisearch), `wanderer-db` (PocketBase on localhost:8090), `wanderer` (SvelteKit web app). Signup is disabled — single-user only.
+
+Health monitored by `wanderer-health.timer` every 10 minutes — sends ntfy alert on failure and recovery.
+
+```bash
+sudo systemctl status wanderer-health.timer
+journalctl -u wanderer-health.service -n 20
+```
+
+### Garmin → Wanderer sync
+Polls Garmin Connect every 30 minutes and pushes new activities as trails to Wanderer. Only syncs activities on or after `GARMIN_SYNC_START_DATE` in `.env`.
+
+```bash
+~/homelab/garmin-sync.sh             # manual run
+journalctl -u garmin-sync.service -n 50
+sudo systemctl status garmin-sync.timer
+```
+
+**First-time setup on a new machine:**
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r gcal-requirements.txt
+~/homelab/.venv/bin/python3 ~/homelab/garmin_sync.py   # interactive auth + token cache
+sudo cp garmin-sync.{service,timer} /etc/systemd/system/
+sudo cp garmin-sync-notify.service /etc/systemd/system/
+sudo cp wanderer-health.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now garmin-sync.timer
+sudo systemctl enable --now wanderer-health.timer
+```
+
+Garmin tokens are cached in `.garmin-tokens/` (gitignored, per-machine). Sync state is in `garmin-sync-state.json` (gitignored). Activity type → Wanderer category mapping is in `CATEGORY_MAP` at the top of `garmin_sync.py` — add your SxS custom activity type there once you see it logged as unmapped.
+
 ### Google Calendar sync
 Two-way sync between Google Calendar and Nextcloud Calendar, running as a systemd timer every 15 minutes.
 

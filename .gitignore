@@ -5,3 +5,8 @@ nextcloud-data/
 nextcloud-config/
 nextcloud-db/
 hass-config/
+wanderer-db/
+wanderer-search/
+wanderer-uploads/
+.garmin-tokens/
+garmin-sync-state.json

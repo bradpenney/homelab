@@ -15,6 +15,10 @@ Use this if the host machine dies and you need to rebuild from scratch.
 | `MYSQL_ROOT_PASSWORD` | MariaDB root access |
 | `MYSQL_PASSWORD` | Nextcloud DB user |
 | `VERCEL_TOKEN` | DDNS updates |
+| `MEILI_MASTER_KEY` | Meilisearch (Wanderer search) |
+| `POCKETBASE_ENCRYPTION_KEY` | Wanderer PocketBase encryption |
+| `GARMIN_PASSWORD` | Garmin Connect sync |
+| `WANDERER_PASSWORD` | Wanderer account |
 | rclone encryption password | Decrypting Google Drive backup |
 | rclone salt password | Decrypting Google Drive backup |
 
@@ -81,6 +85,15 @@ rclone sync nextcloud-crypt:custom_apps ~/homelab/nextcloud-config/custom_apps
 # List available dumps and download the most recent
 rclone ls nextcloud-crypt:db
 rclone copyto nextcloud-crypt:db/nextcloud-dump-YYYY-MM-DD.sql.gz /tmp/nextcloud-dump.sql.gz
+
+# Restore Wanderer data
+mkdir -p ~/homelab/wanderer-db ~/homelab/wanderer-search ~/homelab/wanderer-uploads
+rclone sync nextcloud-crypt:wanderer-db ~/homelab/wanderer-db
+rclone sync nextcloud-crypt:wanderer-uploads ~/homelab/wanderer-uploads
+# Leave wanderer-search empty — Wanderer re-indexes from wanderer-db automatically on startup
+
+# Restore Garmin sync state (prevents duplicate trail creation on first sync)
+rclone copyto nextcloud-crypt:garmin-sync-state.json ~/homelab/garmin-sync-state.json
 ```
 
 ## Step 5 — Set up Traefik data directory
@@ -130,7 +143,7 @@ zcat /tmp/nextcloud-dump.sql.gz | sudo docker exec -i nextcloud-db mariadb \
 sudo docker compose up -d
 ```
 
-## Step 9 — Install DDNS, backup, and cron timers
+## Step 9 — Install DDNS, backup, cron, and Garmin sync timers
 
 ```bash
 chmod +x ~/homelab/ddns-update.sh ~/homelab/backup.sh ~/homelab/notify.sh
@@ -144,11 +157,27 @@ sudo cp ~/homelab/nextcloud-backup.timer /etc/systemd/system/
 sudo cp ~/homelab/nextcloud-backup-notify.service /etc/systemd/system/
 sudo cp ~/homelab/nextcloud-cron.service /etc/systemd/system/
 sudo cp ~/homelab/nextcloud-cron.timer /etc/systemd/system/
+sudo cp ~/homelab/gcal-sync.service /etc/systemd/system/
+sudo cp ~/homelab/gcal-sync.timer /etc/systemd/system/
+sudo cp ~/homelab/garmin-sync.service /etc/systemd/system/
+sudo cp ~/homelab/garmin-sync.timer /etc/systemd/system/
+sudo cp ~/homelab/garmin-sync-notify.service /etc/systemd/system/
+sudo cp ~/homelab/wanderer-health.service /etc/systemd/system/
+sudo cp ~/homelab/wanderer-health.timer /etc/systemd/system/
 
 sudo systemctl daemon-reload
 sudo systemctl enable --now ddns-vercel.timer
 sudo systemctl enable --now nextcloud-backup.timer
 sudo systemctl enable --now nextcloud-cron.timer
+sudo systemctl enable --now gcal-sync.timer
+sudo systemctl enable --now garmin-sync.timer
+sudo systemctl enable --now wanderer-health.timer
+```
+
+Re-authenticate Garmin (required once per machine — tokens are then cached):
+
+```bash
+~/homelab/.venv/bin/python3 ~/homelab/garmin_sync.py
 ```
 
 Test the notification to confirm ntfy is working:

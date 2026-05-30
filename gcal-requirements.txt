@@ -2,3 +2,5 @@ google-auth
 google-auth-oauthlib
 caldav
 icalendar
+garminconnect
+requests

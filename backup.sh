@@ -55,4 +55,29 @@ rclone --config "$RCLONE_CONFIG" sync \
   "${HOMELAB_DIR}/nextcloud-config/custom_apps" \
   "nextcloud-crypt:custom_apps"
 
+log "Backing up Wanderer database (brief stop for SQLite consistency)..."
+docker stop wanderer-db
+cp "${HOMELAB_DIR}/wanderer-db/data.db" /tmp/wanderer-data.db
+cp "${HOMELAB_DIR}/wanderer-db/data.db-wal" /tmp/wanderer-data.db-wal 2>/dev/null || true
+docker start wanderer-db
+
+rclone --config "$RCLONE_CONFIG" copyto /tmp/wanderer-data.db "nextcloud-crypt:wanderer-db/data.db"
+rclone --config "$RCLONE_CONFIG" copyto /tmp/wanderer-data.db-wal "nextcloud-crypt:wanderer-db/data.db-wal" 2>/dev/null || true
+rm -f /tmp/wanderer-data.db /tmp/wanderer-data.db-wal
+
+log "Syncing Wanderer file storage (photos, GPX — safe while running)..."
+rclone --config "$RCLONE_CONFIG" sync \
+  "${HOMELAB_DIR}/wanderer-db/storage" \
+  "nextcloud-crypt:wanderer-db/storage"
+
+log "Syncing Wanderer uploads..."
+rclone --config "$RCLONE_CONFIG" sync \
+  "${HOMELAB_DIR}/wanderer-uploads" \
+  "nextcloud-crypt:wanderer-uploads"
+
+log "Backing up Garmin sync state..."
+rclone --config "$RCLONE_CONFIG" copyto \
+  "${HOMELAB_DIR}/garmin-sync-state.json" \
+  "nextcloud-crypt:garmin-sync-state.json" 2>/dev/null || true
+
 log "Backup complete."

@@ -1,0 +1,6 @@
+[Unit]
+Description=Notify on Garmin sync failure
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/brad/homelab/notify.sh "Garmin Sync Failed" "Garmin → Wanderer sync failed on %H. Check: journalctl -u garmin-sync.service -n 50"
