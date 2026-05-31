@@ -118,10 +118,10 @@ occ config:system:set mail_smtphost --value="smtp.gmail.com"
 occ config:system:set mail_smtpport --value="587"
 occ config:system:set mail_smtpsecure --value="tls"
 occ config:system:set mail_smtpauth --value=1 --type=integer
-occ config:system:set mail_smtpname --value="your.email@gmail.com"
+occ config:system:set mail_smtpname --value="${GOOGLE_EMAIL}"
 occ config:system:set mail_smtppassword --value="${GMAIL_APP_PASSWORD}"
-occ config:system:set mail_from_address ${GOOGLE_EMAIL%%@*}
-occ config:system:set mail_domain --value="gmail.com"
+occ config:system:set mail_from_address --value="${GOOGLE_EMAIL%%@*}"
+occ config:system:set mail_domain --value="${GOOGLE_EMAIL##*@}"
 
 # ---------------------------------------------------------------------------
 # Groups
@@ -163,7 +163,7 @@ done
 log "Creating patti..."
 ocs_post "/users" \
   --data-urlencode "userid=patti" \
-  --data-urlencode "email=family_member@example.com"
+  --data-urlencode "email=${PATTI_EMAIL}"
 ocs_post "/users/patti/groups" -d "groupid=parents"
 ocs_post "/users/patti/groups" -d "groupid=family"
 
@@ -172,9 +172,9 @@ ocs_post "/users/patti/groups" -d "groupid=family"
 # ---------------------------------------------------------------------------
 log "Creating kids accounts..."
 declare -A KID_EMAILS=(
-  [lucas]="kid1@example.com"
-  [xavier]="kid2@example.com"
-  [elliott]="kid3@example.com"
+  [lucas]="${KID1_EMAIL}"
+  [xavier]="${KID2_EMAIL}"
+  [elliott]="${KID3_EMAIL}"
 )
 
 for kid in lucas xavier elliott; do

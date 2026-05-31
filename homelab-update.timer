@@ -1,0 +1,11 @@
+[Unit]
+Description=Weekly homelab Docker image update
+Requires=homelab-update.service
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=900
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -5,6 +5,7 @@ HOMELAB_DIR="/home/brad/homelab"
 RCLONE_CONFIG="/home/brad/.config/rclone/rclone.conf"
 ENV_FILE="${HOMELAB_DIR}/.env"
 DUMP_FILE="/tmp/nextcloud-db-$(date +%Y-%m-%d).sql.gz"
+BACKUP_DIR="nextcloud-crypt:old-versions"
 
 source "$ENV_FILE"
 
@@ -79,5 +80,24 @@ log "Backing up Garmin sync state..."
 rclone --config "$RCLONE_CONFIG" copyto \
   "${HOMELAB_DIR}/garmin-sync-state.json" \
   "nextcloud-crypt:garmin-sync-state.json" 2>/dev/null || true
+
+log "Backing up Claude workspace files..."
+rclone --config "$RCLONE_CONFIG" copyto \
+  "/home/brad/notes/CLAUDE.md" \
+  "nextcloud-crypt:claude/CLAUDE.md"
+rclone --config "$RCLONE_CONFIG" copyto \
+  "/home/brad/notes/.claude/settings.local.json" \
+  "nextcloud-crypt:claude/settings.local.json"
+rclone --config "$RCLONE_CONFIG" copyto \
+  "/home/brad/notes/credentials.json" \
+  "nextcloud-crypt:claude/gcal-credentials.json"
+rclone --config "$RCLONE_CONFIG" sync \
+  "/home/brad/.claude/projects/-home-brad-notes/memory" \
+  "nextcloud-crypt:claude/memory"
+
+log "Backing up homelab secrets..."
+rclone --config "$RCLONE_CONFIG" copyto \
+  "${HOMELAB_DIR}/.env" \
+  "nextcloud-crypt:homelab/dot-env"
 
 log "Backup complete."
