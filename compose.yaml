@@ -187,8 +187,18 @@ services:
       - "traefik.http.routers.wanderer.rule=Host(`${WANDERER_DOMAIN}`)"
       - "traefik.http.routers.wanderer.entrypoints=websecure"
       - "traefik.http.routers.wanderer.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.wanderer.middlewares=nextcloud-headers@docker"
+      - "traefik.http.routers.wanderer.middlewares=wanderer-headers@docker"
       - "traefik.http.services.wanderer.loadbalancer.server.port=3000"
+      # Wanderer-specific headers — referrer policy must allow cross-origin so
+      # Messenger's l.facebook.com redirect service can follow the link.
+      - "traefik.http.middlewares.wanderer-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.wanderer-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.wanderer-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.wanderer-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.wanderer-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.wanderer-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.wanderer-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
+      - "traefik.http.middlewares.wanderer-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
     restart: unless-stopped
 
 networks:
