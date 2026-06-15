@@ -180,6 +180,11 @@ services:
       NOMINATIM_URL: https://nominatim.openstreetmap.org
     volumes:
       - /home/brad/homelab/wanderer-uploads:/app/uploads:Z
+      - /home/brad/homelab/wanderer-branding:/wanderer-branding:ro
+    # Re-brand the stock Wanderer landing/UI to "Brad's Trails" on every start
+    # (patches the built JS before the node server reads it). Survives restarts
+    # and re-applies automatically after a Wanderer image update.
+    command: ["sh", "-c", "/wanderer-branding/patch-branding.sh; exec npm run start"]
     networks:
       - nextcloud
     labels:
@@ -199,6 +204,11 @@ services:
       - "traefik.http.middlewares.wanderer-headers.headers.browserXssFilter=true"
       - "traefik.http.middlewares.wanderer-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
       - "traefik.http.middlewares.wanderer-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
+      # We rebrand by editing the built JS/CSS/image assets in place (same
+      # hashed filenames). Wanderer serves those as `immutable` for a year, so
+      # browsers would never pick up our edits. Override to force revalidation
+      # (cheap 304s via etag) so in-place changes propagate to returning visitors.
+      - "traefik.http.middlewares.wanderer-headers.headers.customResponseHeaders.Cache-Control=no-cache"
     restart: unless-stopped
 
 networks:
