@@ -56,6 +56,16 @@ rclone --config "$RCLONE_CONFIG" sync \
   "${HOMELAB_DIR}/nextcloud-config/custom_apps" \
   "nextcloud-crypt:custom_apps"
 
+log "Backing up Home Assistant (brief stop for SQLite consistency)..."
+docker stop homeassistant
+rclone --config "$RCLONE_CONFIG" sync \
+  "${HOMELAB_DIR}/hass-config" \
+  "nextcloud-crypt:hass-config" \
+  --exclude "home-assistant.log*" \
+  --exclude "deps/**" \
+  --exclude "tts/**"
+docker start homeassistant
+
 log "Backing up Wanderer database (brief stop for SQLite consistency)..."
 docker stop wanderer-db
 cp "${HOMELAB_DIR}/wanderer-db/data.db" /tmp/wanderer-data.db
@@ -75,6 +85,16 @@ log "Syncing Wanderer uploads..."
 rclone --config "$RCLONE_CONFIG" sync \
   "${HOMELAB_DIR}/wanderer-uploads" \
   "nextcloud-crypt:wanderer-uploads"
+
+log "Backing up Donetick database (brief stop for SQLite consistency)..."
+docker stop donetick
+cp "${HOMELAB_DIR}/donetick-data/donetick.db" /tmp/donetick-data.db
+cp "${HOMELAB_DIR}/donetick-data/donetick.db-wal" /tmp/donetick-data.db-wal 2>/dev/null || true
+docker start donetick
+
+rclone --config "$RCLONE_CONFIG" copyto /tmp/donetick-data.db "nextcloud-crypt:donetick-db/data.db"
+rclone --config "$RCLONE_CONFIG" copyto /tmp/donetick-data.db-wal "nextcloud-crypt:donetick-db/data.db-wal" 2>/dev/null || true
+rm -f /tmp/donetick-data.db /tmp/donetick-data.db-wal
 
 log "Backing up Garmin sync state..."
 rclone --config "$RCLONE_CONFIG" copyto \

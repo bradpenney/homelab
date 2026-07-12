@@ -10,3 +10,5 @@ wanderer-search/
 wanderer-uploads/
 .garmin-tokens/
 garmin-sync-state.json
+donetick-data/
+donetick-config/

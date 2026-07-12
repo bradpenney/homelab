@@ -65,6 +65,18 @@ sudo systemctl status wanderer-health.timer
 journalctl -u wanderer-health.service -n 20
 ```
 
+### Donetick (chore tracker)
+Self-hosted household chore/task manager at `https://todo.bradpenney.io`, standing in alongside the Nextcloud CalDAV chore workflow (better mobile experience, has a proper Android app). Single container, SQLite-backed. Config is a mounted file, not env vars — `donetick-config/selfhosted.yaml` (gitignored, holds the JWT secret) controls `jwt.secret`, `server.public_host`, and `server.cors_allow_origins`. Data lives in `donetick-data/` (gitignored).
+
+Signup should be locked (`is_user_creation_disabled: true` in `selfhosted.yaml`, then `docker compose restart donetick`) once the household's accounts exist — it starts open.
+
+Health monitored by `donetick-health.timer` every 10 minutes — sends ntfy alert on failure and recovery, same pattern as Nextcloud/Wanderer.
+
+```bash
+sudo systemctl status donetick-health.timer
+journalctl -u donetick-health.service -n 20
+```
+
 ### Garmin → Wanderer sync
 Polls Garmin Connect every 30 minutes and pushes new activities as trails to Wanderer. Only syncs activities on or after `GARMIN_SYNC_START_DATE` in `.env`.
 

@@ -192,8 +192,13 @@ services:
       - "traefik.http.routers.wanderer.rule=Host(`${WANDERER_DOMAIN}`)"
       - "traefik.http.routers.wanderer.entrypoints=websecure"
       - "traefik.http.routers.wanderer.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.wanderer.middlewares=wanderer-headers@docker"
+      - "traefik.http.routers.wanderer.middlewares=wanderer-headers@docker,wanderer-compress@docker"
       - "traefik.http.services.wanderer.loadbalancer.server.port=3000"
+      # The branding patch deletes Wanderer's precompressed .br/.gz assets so
+      # its in-place edits actually get served, which left every response
+      # (HTML, JS/CSS bundles, photo thumbnails) going out uncompressed.
+      # Compress on the fly at the proxy instead.
+      - "traefik.http.middlewares.wanderer-compress.compress=true"
       # Wanderer-specific headers — referrer policy must allow cross-origin so
       # Messenger's l.facebook.com redirect service can follow the link.
       - "traefik.http.middlewares.wanderer-headers.headers.stsSeconds=31536000"
@@ -206,9 +211,40 @@ services:
       - "traefik.http.middlewares.wanderer-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
       # We rebrand by editing the built JS/CSS/image assets in place (same
       # hashed filenames). Wanderer serves those as `immutable` for a year, so
-      # browsers would never pick up our edits. Override to force revalidation
-      # (cheap 304s via etag) so in-place changes propagate to returning visitors.
-      - "traefik.http.middlewares.wanderer-headers.headers.customResponseHeaders.Cache-Control=no-cache"
+      # browsers would never pick up our edits. Cap caching at 5 minutes instead
+      # of the default 1yr immutable — bounds staleness after a future branding
+      # edit to one force-recreate + a short wait, while still letting repeat
+      # page views within a browsing session skip full revalidation round-trips.
+      - "traefik.http.middlewares.wanderer-headers.headers.customResponseHeaders.Cache-Control=max-age=300, must-revalidate"
+    restart: unless-stopped
+
+  donetick:
+    container_name: donetick
+    image: donetick/donetick
+    environment:
+      DT_ENV: selfhosted
+      DT_SQLITE_PATH: /donetick-data/donetick.db
+      TZ: America/Halifax
+    volumes:
+      - /home/brad/homelab/donetick-data:/donetick-data:Z
+      - /home/brad/homelab/donetick-config/selfhosted.yaml:/config/selfhosted.yaml:Z
+    networks:
+      - nextcloud
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.donetick.rule=Host(`${DONETICK_DOMAIN}`)"
+      - "traefik.http.routers.donetick.entrypoints=websecure"
+      - "traefik.http.routers.donetick.tls.certresolver=letsencrypt"
+      - "traefik.http.services.donetick.loadbalancer.server.port=2021"
+      - "traefik.http.routers.donetick.middlewares=donetick-headers"
+      - "traefik.http.middlewares.donetick-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.donetick-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.donetick-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.donetick-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.donetick-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.donetick-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.donetick-headers.headers.referrerPolicy=no-referrer"
+      - "traefik.http.middlewares.donetick-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
     restart: unless-stopped
 
 networks:

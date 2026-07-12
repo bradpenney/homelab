@@ -49,6 +49,12 @@ done
 #     (the SVG starfield is a separate element and is left intact).
 #  2. Shrink the hero photo so it doesn't crowd the edges (gives margin/breathing room).
 #  3. Hide the "Getting Started" call-to-action section.
+#  4. Fix the feed-card photo mosaic: upstream's row-span-2 class IS applied
+#     correctly to the first tile, but the grid's rows are auto-sized while the
+#     tile itself is height:100% — a circular dependency (the row can't size
+#     from content that needs the row's size first), so browsers collapse it
+#     and leave the spanned tile's second row blank. Give the rows a fixed
+#     height so the percentage height has something definite to resolve against.
 MARKER='/*brad-css*/'
 # Hide the diorama canvas with visibility:hidden (NOT display:none) so it keeps
 # its layout box — display:none collapses the container height, which zeroes out
@@ -57,10 +63,37 @@ MARKER='/*brad-css*/'
 CSS='.left-\[40\%\] canvas{visibility:hidden!important}'
 CSS="$CSS"'.left-\[40\%\] img{max-height:62vh!important;max-width:88%!important}'
 CSS="$CSS"'#get-started{display:none!important}'
+CSS="$CSS"'.grid-cols-\[8fr_5fr\]{grid-auto-rows:10rem!important}'
 find "$BUILD/client" -name '*.css' 2>/dev/null | while IFS= read -r f; do
   grep -qF "$MARKER" "$f" 2>/dev/null && continue
   printf '%s%s' "$MARKER" "$CSS" >> "$f"
 done
+
+# --- Default sort order: /trails page + homepage recommendations ---
+# Upstream defaults the trails browse page to oldest-first ascending, and the
+# homepage widget is a random sample that (with only a handful of trails so
+# far) always lands on offset 0, i.e. oldest-first by coincidence. Brad wants
+# newest-first everywhere. Scoped narrowly (path/content match) so lists and
+# profile pages, which weren't asked about, are left on their own defaults.
+
+# /trails page: server-rendered initial filter (used before any localStorage
+# sort preference is picked up client-side).
+f=$(find "$BUILD" -path '*/entries/pages/trails/_page.ts.js-*.js' ! -name '*.map' 2>/dev/null | head -1)
+[ -n "$f" ] && sed -i 's/sortOrder: "+"/sortOrder: "-"/' "$f"
+
+# /trails page: client-side copy of the same initial filter, used on
+# client-side (SPA) navigation to the page instead of a full SSR load.
+# NOTE: 'elevationLossLimit' alone matches multiple route bundles (any page
+# sharing the filter object shape) — the '.max_elevation_loss,sort:...' form
+# below is the specific expression from the /trails +page.ts source and only
+# ever matches the one file. Do not loosen this back to the shorter form.
+f=$(grep -rlF '.max_elevation_loss,sort:`created`,sortOrder:`+`' "$BUILD/client" 2>/dev/null | head -1)
+[ -n "$f" ] && sed -i 's/\.max_elevation_loss,sort:`created`,sortOrder:`+`/.max_elevation_loss,sort:`created`,sortOrder:`-`/' "$f"
+
+# Homepage "recommended trails" widget: replace the random-sample logic with
+# an explicit newest-first sort (see patch-recommend.js for the full diff).
+f=$(find "$BUILD" -path '*/entries/endpoints/api/v1/trail/recommend/_server.ts.js-*.js' ! -name '*.map' 2>/dev/null | head -1)
+[ -n "$f" ] && node /wanderer-branding/patch-recommend.js "$f"
 
 # Wanderer ships pre-compressed .br/.gz copies of every JS/CSS asset and the
 # node server serves those to browsers (which send Accept-Encoding: br). They
