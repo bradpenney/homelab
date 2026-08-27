@@ -1,0 +1,8 @@
+[Unit]
+Description=Notify when a cluster security invariant breaks
+
+[Service]
+Type=oneshot
+User=brad
+ExecStart=/bin/bash /home/brad/homelab/notify.sh "Cluster Security Drift" \
+  "A security invariant broke on %H. Check: journalctl -u posture-check.service -n 40"

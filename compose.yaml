@@ -11,6 +11,11 @@ services:
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
+      # File provider for routes that are NOT docker containers — currently the
+      # TCP/SNI passthrough to the k0s cluster's Traefik. See
+      # traefik-data/dynamic/k8s-passthrough.yml and ADR-053.
+      - --providers.file.directory=/data/dynamic
+      - --providers.file.watch=true
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.redirections.entrypoint.to=websecure
       - --entrypoints.web.http.redirections.entrypoint.scheme=https

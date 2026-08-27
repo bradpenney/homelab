@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Vercel DDNS update every 5 minutes
+Description=Run Cloudflare DDNS update every 5 minutes
 
 [Timer]
 OnBootSec=1min

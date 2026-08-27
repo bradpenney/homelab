@@ -1,6 +1,25 @@
 .env
 .venv/
+# traefik-data holds acme.json — the Let's Encrypt ACCOUNT KEY and the private
+# key of every certificate this Traefik has issued. Never commit it.
+#
+# dynamic/ is configuration rather than key material, and one file in it is a
+# security control (the Cloudflare-only origin lock, ADR-070). It is still NOT
+# committed, deliberately: this repository is PUBLIC, and that file describes the
+# ingress topology — which host fronts the cluster, on which LAN address, and
+# which hostnames are proxied. That is the same class of detail deliberately kept
+# out of `substrate` via site.yml.
+#
+# It is protected by BACKUP instead of by git — see backup.sh, which syncs
+# traefik-data/dynamic to the encrypted remote. Losing it would silently reopen
+# the public bypass, so it must be recoverable even though it is not in version
+# control.
 traefik-data/
+
+# Timestamped .bak files from in-place edits. Git is the backup; a public repo
+# does not need six copies of an old script.
+*.bak
+*.bak-*
 nextcloud-data/
 nextcloud-config/
 nextcloud-db/

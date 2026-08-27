@@ -1,0 +1,12 @@
+[Unit]
+Description=Daily cluster security posture check
+
+[Timer]
+# Morning, after the 03:17 etcd snapshot and the 03:00 nextcloud backup, so a
+# failure in either is already visible by the time this reports.
+OnCalendar=*-*-* 07:30:00
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

@@ -8,7 +8,7 @@ STATE_FILE="/var/cache/wanderer-health/state"
 mkdir -p "$(dirname "$STATE_FILE")"
 PREV_STATE=$(cat "$STATE_FILE" 2>/dev/null || echo "up")
 
-HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 15 \
+HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" --max-time 15 --resolve "${WANDERER_DOMAIN}:443:127.0.0.1" \
   "https://${WANDERER_DOMAIN}" 2>/dev/null || echo "000")
 
 if [[ "$HTTP_CODE" == "200" ]]; then

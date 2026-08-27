@@ -64,10 +64,27 @@ CSS='.left-\[40\%\] canvas{visibility:hidden!important}'
 CSS="$CSS"'.left-\[40\%\] img{max-height:62vh!important;max-width:88%!important}'
 CSS="$CSS"'#get-started{display:none!important}'
 CSS="$CSS"'.grid-cols-\[8fr_5fr\]{grid-auto-rows:10rem!important}'
+# Homepage "About" teaser renders an empty <div class="prose"> — a separate
+# client-side fetch+markdown-render of /md/about.md (confirmed 200 OK with
+# real content) silently fails somewhere between fetch and render; the error
+# is swallowed by a bare console.warn with no way to see it without a live
+# browser console. Stopgap until we can grab the actual console error: hide
+# the section. The real About content still works fine at /about.
+CSS="$CSS"'#about{display:none!important}'
 find "$BUILD/client" -name '*.css' 2>/dev/null | while IFS= read -r f; do
   grep -qF "$MARKER" "$f" 2>/dev/null && continue
   printf '%s%s' "$MARKER" "$CSS" >> "$f"
 done
+
+# --- Force dark theme always ("looks way better" — Brad) ---
+# See patch-dark-mode.js for why this is a dedicated node script rather than
+# more `patch` calls: the literal text involved (backticks, brackets,
+# backslash-escaped quotes) is unreliable to match with sed's BRE patterns.
+node /wanderer-branding/patch-dark-mode.js "$BUILD"
+
+# --- Gallery/lightbox photos: request a sized thumbnail, not the original ---
+# Root cause of "photos load very very slow": see patch-gallery-thumbs.js.
+node /wanderer-branding/patch-gallery-thumbs.js "$BUILD"
 
 # --- Default sort order: /trails page + homepage recommendations ---
 # Upstream defaults the trails browse page to oldest-first ascending, and the

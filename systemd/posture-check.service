@@ -1,0 +1,25 @@
+[Unit]
+Description=Assert the k0s cluster's security invariants still hold
+Documentation=file:///home/brad/notes/adr_register.md
+# Same pattern as nextcloud-backup: a failure fires a notification rather than
+# sitting silently in the journal. Every control on this cluster is preventive;
+# this unit is the only thing that NOTICES when one stops being true.
+OnFailure=posture-check-notify.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=brad
+# Runs as the scoped read-only identity, never break-glass (ADR-071).
+Environment=POSTURE_CONTEXT=brad
+# kubectl lives under linuxbrew, which is NOT on systemd's default PATH.
+# Without this the script cannot find it and every check fails — which reads as
+# a security incident rather than a missing binary.
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+# The REPO VENV, not the system python. posture-check.py reads site.yml
+# through hosts.py, which needs PyYAML — the system interpreter does not have
+# it, and the failure is an import error at 07:30 rather than anything useful.
+ExecStart=/home/brad/notes/source_code/substrate/.venv/bin/python3 \
+  /home/brad/notes/source_code/substrate/posture-check.py
+TimeoutStartSec=300
