@@ -1,0 +1,8 @@
+[Unit]
+Description=Notify when the homelab Docker image update fails
+
+[Service]
+Type=oneshot
+User=brad
+ExecStart=/bin/bash /home/brad/homelab/notify.sh "Homelab Image Update Failed" \
+  "docker compose pull failed on %H after retries. Check: journalctl -u homelab-update.service -n 40"

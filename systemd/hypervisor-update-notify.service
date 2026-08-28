@@ -1,0 +1,8 @@
+[Unit]
+Description=Notify when the nightly hypervisor update fails
+
+[Service]
+Type=oneshot
+User=brad
+ExecStart=/bin/bash /home/brad/homelab/notify.sh "Hypervisor Update Failed" \
+  "Nightly update aborted on %H — the host has NOT rebooted or patched. Check: journalctl -u hypervisor-update.service -n 40"

@@ -1,0 +1,13 @@
+[Unit]
+# OnFailure belongs in [Unit]. It was in [Service], where systemd IGNORES it --
+# `systemctl show -p OnFailure` returned empty, so a DDNS failure would have
+# been completely silent. Fixed 2026-08-27.
+OnFailure=ddns-notify.service
+Description=Cloudflare DDNS update for nextcloud.bradpenney.io
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /home/brad/homelab/ddns-update.sh
+

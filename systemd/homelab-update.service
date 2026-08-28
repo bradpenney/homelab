@@ -1,0 +1,30 @@
+[Unit]
+StartLimitIntervalSec=600
+StartLimitBurst=4
+Description=Homelab Docker image update
+After=network-online.target docker.service
+Wants=network-online.target
+# Was OnFailure=nextcloud-backup-notify.service — the NEXTCLOUD BACKUP notifier,
+# on the docker-image-update unit. A failed image pull therefore sent "Nextcloud
+# Backup Failed", pointing at a service that had run perfectly. systemd even
+# warned about the shared notifier:
+#   "multiple trigger source candidates for exit status propagation
+#    (homelab-update.service, nextcloud-backup.service), skipping"
+# An alert that names the wrong subsystem is worse than no alert: it sends you
+# to read the wrong logs. Fixed 2026-08-27.
+OnFailure=homelab-update-notify.service
+
+[Service]
+Type=oneshot
+# `network-online.target` means an interface is configured, NOT that the
+# internet is reachable. This unit ran 16 seconds after a reboot, every image
+# pull failed, and the same pull succeeded by hand five minutes later.
+#
+# Retry rather than alert on the first attempt: a transient post-boot failure
+# heals itself, while a genuine outage still exhausts the retries and notifies.
+Restart=on-failure
+RestartSec=90
+ExecStart=/bin/bash /home/brad/homelab/update.sh
+StandardOutput=journal
+StandardError=journal
+

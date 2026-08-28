@@ -31,3 +31,6 @@ wanderer-uploads/
 garmin-sync-state.json
 donetick-data/
 donetick-config/
+
+# staged kubeconfig — contains a client cert; install to /etc/homelab and delete
+hypervisor-kubeconfig.new

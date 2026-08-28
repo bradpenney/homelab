@@ -1,0 +1,19 @@
+[Unit]
+Description=Daily homelab Docker image update
+# NO `Requires=homelab-update.service` here. On a timer unit, a [Unit] Requires=
+# on its own service is a start dependency: every time timers.target brings the
+# timer up -- i.e. every boot -- systemd also starts the service immediately,
+# ignoring OnCalendar entirely. That is why this ran 15s after the reboots on
+# 2026-08-27 20:37 and 2026-08-28 03:44, before systemd-resolved answered, and
+# every image pull failed with "lookup registry-1.docker.io: no such host".
+# The timer already activates the same-named service via [Timer] Unit=.
+# Fixed 2026-08-28.
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+RandomizedDelaySec=900
+Persistent=true
+Unit=homelab-update.service
+
+[Install]
+WantedBy=timers.target

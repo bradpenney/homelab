@@ -1,0 +1,10 @@
+[Unit]
+Description=Notify on DDNS update failure
+
+[Service]
+Type=oneshot
+User=brad
+# Was pointing at `ddns-vercel.service`, deleted in the Cloudflare migration --
+# so the alert told you to read a journal for a unit that no longer exists.
+ExecStart=/bin/bash /home/brad/homelab/notify.sh "DDNS Update Failed" \
+  "DNS record for nextcloud.bradpenney.io may be stale on %H. Check: journalctl -u ddns-cloudflare.service -n 20"
