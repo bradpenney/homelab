@@ -1,0 +1,11 @@
+[Unit]
+Description=Sync Google Calendar with Nextcloud via vdirsyncer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=brad
+ExecStart=/bin/bash /home/brad/homelab/gcal-sync.sh
+StandardOutput=journal
+StandardError=journal

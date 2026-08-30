@@ -1,0 +1,17 @@
+[Unit]
+Description=Notify when the component nag itself fails
+
+[Service]
+Type=oneshot
+User=brad
+Group=brad
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+# A nag that silently stops working means upgrades pile up unnoticed — the
+# failure mode is invisible by construction, so it needs its own alert.
+# Via /bin/bash, like every other unit here. This one happens to work with a
+# direct exec because notify.sh is labelled bin_t while the other scripts are
+# user_home_t — an inconsistency, not a design. If notify.sh is ever REPLACED
+# rather than edited (or restorecon runs), it reverts to user_home_t and every
+# direct-exec notifier breaks at once. The indirection works either way.
+ExecStart=/bin/bash /home/brad/homelab/notify.sh "Component nag failed" \
+  "component-nag.service failed on %H — platform upgrade reminders are NOT being sent. Check: journalctl -u component-nag.service -n 30"

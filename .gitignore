@@ -34,3 +34,6 @@ donetick-config/
 
 # staged kubeconfig — contains a client cert; install to /etc/homelab and delete
 hypervisor-kubeconfig.new
+
+# gh writes here if HOME is unset; not a credential, but machine-identifying
+.local/

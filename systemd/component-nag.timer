@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily reminder about platform upgrades awaiting review
+
+[Timer]
+# Morning, after component-watch has run in GitHub Actions (08:00 UTC) so the
+# PRs and issues it opens are visible to this nag on the same day.
+OnCalendar=*-*-* 09:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=component-nag.service
+
+[Install]
+WantedBy=timers.target

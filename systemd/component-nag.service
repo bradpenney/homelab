@@ -1,0 +1,37 @@
+[Unit]
+StartLimitIntervalSec=600
+StartLimitBurst=3
+Description=Nag about platform upgrades waiting on a human
+Documentation=https://github.com/bradpenney/substrate_config
+After=network-online.target
+Wants=network-online.target
+OnFailure=component-nag-notify.service
+
+[Service]
+Type=oneshot
+# Runs as the admin user, NOT root: it only reads the GitHub API using the
+# user's own `gh` credentials and calls ~/homelab/notify.sh, which reads the
+# ntfy topic from ~/homelab/.env. Nothing here needs privilege.
+User=brad
+Group=brad
+# `gh` lives under linuxbrew, which is NOT on systemd's default PATH — the same
+# trap that made posture-check report six invariants broken when it could not
+# find kubectl.
+Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
+# HOME explicitly, not relying on systemd setting it for User=. `gh` reads its
+# credentials from $HOME/.config/gh, and without it the CLI does not error in a
+# way a naive caller notices — it prints "please run gh auth login" and exits 0.
+Environment=HOME=/home/brad
+# `/bin/bash <script>`, NOT the script directly. SELinux is enforcing, and
+# systemd (init_t) may not execute a file labelled user_home_t:
+#   avc: denied { execute } ... scontext=init_t tcontext=user_home_t
+# Executing /bin/bash (bin_t) and passing the script as an ARGUMENT means
+# bash merely READS it, which is allowed. Every other unit in this repo
+# already did it this way; this one deviated and was the only one that
+# failed. Found by triggering it manually rather than waiting for the timer.
+ExecStart=/bin/bash /home/brad/homelab/component-nag.sh
+# Transient GitHub API failures should not page; a real outage exhausts these.
+Restart=on-failure
+RestartSec=120
+StandardOutput=journal
+StandardError=journal
