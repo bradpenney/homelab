@@ -1,0 +1,16 @@
+[Unit]
+Description=DNS health check (DDNS drift + Cloudflare token expiry)
+# A non-zero exit means the CHECKER broke, not that DNS is bad -- faults are
+# reported by notification. OnFailure belongs in [Unit]; systemd silently
+# ignores it in [Service].
+OnFailure=dns-health-notify.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=brad
+# Creates /var/cache/dns-health owned by User= and exports $CACHE_DIRECTORY.
+# Without this the script cannot write its state files as a non-root user.
+CacheDirectory=dns-health
+ExecStart=/bin/bash /home/brad/homelab/dns-health.sh

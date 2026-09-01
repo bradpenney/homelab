@@ -13,13 +13,19 @@ Type=oneshot
 User=brad
 # Runs as the scoped read-only identity, never break-glass (ADR-071).
 Environment=POSTURE_CONTEXT=brad
-# kubectl lives under linuxbrew, which is NOT on systemd's default PATH.
-# Without this the script cannot find it and every check fails — which reads as
-# a security incident rather than a missing binary.
-Environment=PATH=/home/linuxbrew/.linuxbrew/bin:/usr/local/bin:/usr/bin:/bin
-# The REPO VENV, not the system python. posture-check.py reads site.yml
-# through hosts.py, which needs PyYAML — the system interpreter does not have
-# it, and the failure is an import error at 07:30 rather than anything useful.
-ExecStart=/home/brad/notes/source_code/substrate/.venv/bin/python3 \
-  /home/brad/notes/source_code/substrate/posture-check.py
+#
+# SELINUX GOVERNS BOTH LINES BELOW. Fedora labels everything under
+# /home/linuxbrew as user_home_t, and a systemd service may not execute a
+# user_home_t binary -- it fails with 203/EXEC "Permission denied" on a file
+# that exists and that `brad` can run fine from a shell. Anything this unit
+# executes must therefore resolve to a system path (bin_t).
+#
+# So: NO linuxbrew on PATH. /usr/local/bin/kubectl is bin_t, and at v1.36.1 is
+# also closer to the cluster (v1.36.3) than linuxbrew's v1.35.1.
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+# And the SYSTEM interpreter, not substrate's .venv -- that venv is built on
+# linuxbrew's python, so systemd cannot exec it. This needs python3-pydantic
+# and python3-pyyaml installed as RPMs; posture-check.py reaches site.yml
+# through hosts.py -> siteconfig.py, which imports pydantic.
+ExecStart=/usr/bin/python3 /home/brad/notes/source_code/substrate/posture-check.py
 TimeoutStartSec=300

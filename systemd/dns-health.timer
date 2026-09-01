@@ -1,0 +1,13 @@
+[Unit]
+Description=Run DNS health check every 15 minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+# Catch up after the workstation has been off, so a token that expired while
+# server1 was down is reported at the next boot rather than at the next
+# quarter-hour that happens to line up.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,8 @@
+[Unit]
+Description=Notify when the DNS health check itself fails
+
+[Service]
+Type=oneshot
+User=brad
+ExecStart=/bin/bash /home/brad/homelab/notify.sh "DNS Health Check BROKEN" \
+  "dns-health.sh failed to run on %H -- so DDNS drift and Cloudflare token expiry are currently UNMONITORED. Check: journalctl -u dns-health.service -n 30"
