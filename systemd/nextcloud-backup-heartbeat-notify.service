@@ -1,0 +1,8 @@
+[Unit]
+Description=Notify when the backup heartbeat itself fails
+
+[Service]
+Type=oneshot
+User=brad
+ExecStart=/bin/bash /home/brad/homelab/notify.sh "Backup Heartbeat BROKEN" \
+  "backup-heartbeat.sh failed to run on %H -- so nothing is confirming the nightly Nextcloud backup completed, and OnFailure= alone cannot. Check: journalctl -u nextcloud-backup-heartbeat.service -n 30"

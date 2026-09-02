@@ -1,8 +1,15 @@
 [Unit]
-Description=Daily Nextcloud backup at 3am
+Description=Daily Nextcloud backup at 1am
 
 [Timer]
-OnCalendar=*-*-* 03:00:00
+# Moved 03:00 -> 01:00 on 2026-09-02. hypervisor-update.timer is also
+# OnCalendar=03:00 (RandomizedDelaySec=45m) and rebooted the host mid-backup on
+# five nights out of six, killing the run by signal -- silently, because systemd
+# will not enqueue an OnFailure= job while a reboot transaction is queued.
+# A full run takes ~30min, so 01:00-01:40 clears the updater's window entirely.
+# The schedule is the separation; hypervisor-update.sh's interlock is the
+# guarantee. Do not collapse the two back together.
+OnCalendar=*-*-* 01:00:00
 RandomizedDelaySec=10min
 Persistent=true
 

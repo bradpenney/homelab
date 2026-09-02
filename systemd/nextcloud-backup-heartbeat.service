@@ -1,0 +1,13 @@
+[Unit]
+Description=Assert the nightly Nextcloud backup actually completed
+# A non-zero exit means the HEARTBEAT broke, not that the backup is stale --
+# a stale backup is reported by notification and exits 0. OnFailure belongs in
+# [Unit]; systemd silently ignores it in [Service].
+OnFailure=nextcloud-backup-heartbeat-notify.service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=brad
+ExecStart=/bin/bash /home/brad/homelab/backup-heartbeat.sh

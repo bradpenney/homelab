@@ -6,6 +6,9 @@ OnFailure=nextcloud-backup-notify.service
 
 [Service]
 Type=oneshot
+# Creates /var/lib/homelab, where backup.sh writes its success stamp. The stamp
+# has to outlive a reboot, so it cannot go in /run -- see backup-heartbeat.sh.
+StateDirectory=homelab
 ExecStart=/bin/bash /home/brad/homelab/backup.sh
 StandardOutput=journal
 StandardError=journal

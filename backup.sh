@@ -7,6 +7,11 @@ ENV_FILE="${HOMELAB_DIR}/.env"
 DUMP_FILE="/tmp/nextcloud-db-$(date +%Y-%m-%d).sql.gz"
 BACKUP_DIR="nextcloud-crypt:old-versions"
 
+# Written as the very last act of a clean run, and read by backup-heartbeat.sh.
+# It lives under /var/lib (StateDirectory=homelab in the unit) rather than /run
+# because its whole job is to survive the reboot that killed the backup.
+STAMP_FILE="${STAMP_FILE:-${STATE_DIRECTORY:-/var/lib/homelab}/nextcloud-backup.stamp}"
+
 source "$ENV_FILE"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
@@ -224,4 +229,9 @@ if (( FAILURES > 0 )); then
     log "untouched rather than being overwritten with nothing."
     exit 1
 fi
+# Only a fully clean run stamps. A run that refused a source, hit --max-delete,
+# or was killed leaves the previous stamp in place to go stale, which is exactly
+# what the heartbeat is looking for.
+mkdir -p "$(dirname "$STAMP_FILE")"
+date -Is > "$STAMP_FILE"
 log "Backup complete."

@@ -1,0 +1,14 @@
+[Unit]
+Description=Check every morning that last night's Nextcloud backup completed
+
+[Timer]
+# 08:00: well after the 01:00 backup window, and after the 03:00 hypervisor
+# update window that used to eat it -- so a reboot-killed run is reported the
+# same morning rather than a day late.
+OnCalendar=*-*-* 08:00:00
+# Catch up after the workstation has been off. A backup missed because server1
+# was down overnight is exactly the case this must not sleep through.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
