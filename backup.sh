@@ -2,7 +2,16 @@
 set -euo pipefail
 
 HOMELAB_DIR="/home/brad/homelab"
-RCLONE_CONFIG="/home/brad/.config/rclone/rclone.conf"
+# root's OWN copy, not brad's (ADR-141). This unit runs as root, and rclone
+# rewrites its config in place whenever it refreshes an OAuth token — as
+# whoever is running. Pointed at /home/brad/..., one nightly run silently
+# took that file to root:root 0600 and left the user-level `rclone-gdrive`
+# mount in a permanent restart loop, with no notifier to say so. A privileged
+# process must not write a file an unprivileged one has to read.
+# Seed/refresh with:
+#   sudo install -D -m 600 -o root -g root \
+#     /home/brad/.config/rclone/rclone.conf /root/.config/rclone/rclone.conf
+RCLONE_CONFIG="/root/.config/rclone/rclone.conf"
 ENV_FILE="${HOMELAB_DIR}/.env"
 DUMP_FILE="/tmp/nextcloud-db-$(date +%Y-%m-%d).sql.gz"
 BACKUP_DIR="nextcloud-crypt:old-versions"
@@ -114,52 +123,42 @@ sync_guarded "${HOMELAB_DIR}/hass-config" "nextcloud-crypt:hass-config" \
   --exclude "tts/**"
 docker start homeassistant
 
-log "Backing up Wanderer database (brief stop for SQLite consistency)..."
-docker stop wanderer-db
-cp "${HOMELAB_DIR}/wanderer-db/data.db" /tmp/wanderer-data.db
-cp "${HOMELAB_DIR}/wanderer-db/data.db-wal" /tmp/wanderer-data.db-wal 2>/dev/null || true
-docker start wanderer-db
-
-rclone --config "$RCLONE_CONFIG" copyto /tmp/wanderer-data.db "nextcloud-crypt:wanderer-db/data.db"
-rclone --config "$RCLONE_CONFIG" copyto /tmp/wanderer-data.db-wal "nextcloud-crypt:wanderer-db/data.db-wal" 2>/dev/null || true
-rm -f /tmp/wanderer-data.db /tmp/wanderer-data.db-wal
-
-log "Syncing Wanderer file storage (photos, GPX — safe while running)..."
-sync_guarded "${HOMELAB_DIR}/wanderer-db/storage" "nextcloud-crypt:wanderer-db/storage"
-
-log "Syncing Wanderer uploads..."
-# wanderer-uploads is NOT backed up, deliberately.
+# Wanderer moved to the k0s cluster 2026-09-09 (ADR-153). Its backup is now a
+# CronJob in the wanderer namespace: a PocketBase snapshot taken through
+# SQLite's online-backup API plus an rclone sync of the storage tree, verified
+# by re-reading the destination -- see substrate_config apps/wanderer/backup.yaml.
 #
-# It is bind-mounted to /app/uploads in the wanderer container, but Wanderer
-# never persists anything there -- uploads are processed straight into
-# PocketBase storage, which IS backed up above as wanderer-db/storage (515MB,
-# 112 photos and GPX files). The directory has been empty since it was created
-# and the remote copy has never existed: `rclone size` on it returns
-# "directory not found".
+# It writes to nextcloud-crypt:k8s-pv/wanderer/, a DIFFERENT path from the
+# nextcloud-crypt:wanderer-db/ this section used. The old copy is deliberately
+# left in place as history; nothing here writes to it any more.
 #
-# Backing it up was speculative when this line was written. On 2026-08-26 the
-# empty-source guard correctly refused it and failed the whole run, which is the
-# guard working -- but the right fix is to stop asking for something that was
-# never meaningful, rather than to weaken the guard.
+# THIS SECTION HAD TO GO, and for the same reason donetick's did. It ran
+# `docker stop wanderer-db` and this script is `set -euo pipefail`: the moment
+# that container no longer exists the script ABORTS AT THAT LINE, and
+# everything below it stops running -- including the Garmin sync state and the
+# notes tree. A dead stanza here does not fail quietly, it takes the rest of
+# the nightly run down with it.
 #
-# The check below turns that assumption into an assertion: if the directory ever
-# DOES fill up, Wanderer's behaviour has changed and this decision needs
-# revisiting. It warns rather than failing, because content appearing here is a
-# reason to look, not a reason to declare the backup broken.
-if [ -d "${HOMELAB_DIR}/wanderer-uploads" ] && [ -n "$(ls -A "${HOMELAB_DIR}/wanderer-uploads" 2>/dev/null)" ]; then
-  log "NOTICE: wanderer-uploads is no longer empty. Wanderer may have changed"
-  log "        where it stores files -- check whether it now needs backing up."
-fi
+# Worse, and specific to Wanderer: this section also ran `docker start
+# wanderer-db` afterwards. Left in place it would have RESTARTED the stopped
+# compose PocketBase at 01:05 tonight, reopening exactly the divergence the
+# cutover closed -- a ride landing in a database nobody will ever read again.
+#
+# The wanderer-uploads assertion that used to live here is gone with it. It
+# existed to detect Wanderer changing where it stores files; the cluster
+# Deployment now encodes the same fact as an emptyDir, with the reasoning in
+# apps/wanderer/deployment-web.yaml.
 
-log "Backing up Donetick database (brief stop for SQLite consistency)..."
-docker stop donetick
-cp "${HOMELAB_DIR}/donetick-data/donetick.db" /tmp/donetick-data.db
-cp "${HOMELAB_DIR}/donetick-data/donetick.db-wal" /tmp/donetick-data.db-wal 2>/dev/null || true
-docker start donetick
-
-rclone --config "$RCLONE_CONFIG" copyto /tmp/donetick-data.db "nextcloud-crypt:donetick-db/data.db"
-rclone --config "$RCLONE_CONFIG" copyto /tmp/donetick-data.db-wal "nextcloud-crypt:donetick-db/data.db-wal" 2>/dev/null || true
-rm -f /tmp/donetick-data.db /tmp/donetick-data.db-wal
+# Donetick moved to the k0s cluster 2026-09-06 (ADR-135). Its backup is now a
+# CronJob in the donetick namespace, taking a `sqlite3 .backup` snapshot of the
+# live database and uploading only that -- see substrate_config
+# apps/donetick/backup.yaml.
+#
+# THIS SECTION HAD TO GO, not just for tidiness. It ran `docker stop donetick`,
+# and this script is `set -euo pipefail`: once the container no longer exists
+# that command fails and the script ABORTS. Everything below it -- the Garmin
+# sync state, and the 836 MB notes tree that was added here precisely because it
+# had no backup anywhere -- would silently stop being backed up.
 
 log "Backing up Garmin sync state..."
 rclone --config "$RCLONE_CONFIG" copyto \

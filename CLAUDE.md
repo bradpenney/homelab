@@ -55,15 +55,41 @@ journalctl -u nextcloud-health.service -n 20
 
 **TODO:** Add an external uptime monitor (e.g. UptimeRobot free tier) pointing at `https://nextcloud.bradpenney.io` to catch cases where the server itself is offline. The local health check cannot detect its own outage.
 
-### Wanderer (trail journal)
-Self-hosted trail journal at `https://trails.bradpenney.io`. Three containers: `wanderer-search` (Meilisearch), `wanderer-db` (PocketBase on localhost:8090), `wanderer` (SvelteKit web app). Signup is disabled — single-user only.
+### Wanderer (trail journal) — MIGRATED TO THE CLUSTER 2026-09-09
 
-Health monitored by `wanderer-health.timer` every 10 minutes — sends ntfy alert on failure and recovery.
+⚠️ **Wanderer no longer runs here.** It moved to the k0s cluster on 2026-09-09
+(ADR-153) and was removed from `compose.yaml` and `backup.sh`. Served at the
+same hostname via the SNI passthrough in
+`traefik-data/dynamic/k8s-passthrough.yml`, now behind the ADR-070 origin lock.
+
+**Anything that still points at `localhost:8090` or `~/homelab/wanderer-db/` is
+aimed at a dead copy.** The compose containers are stopped and their data
+directory is frozen at the cutover; the live database is a Longhorn PV in the
+cluster, and it is the only one anyone reads now.
+
+Reach the live instance with:
+
+```bash
+kubectl -n wanderer get pods
+kubectl -n wanderer port-forward svc/wanderer-db 8090:8090   # PocketBase API
+```
+
+Health monitored by `wanderer-health.timer` every 10 minutes. It checks the
+CLUSTER INGRESS, not loopback — see the comment in `wanderer-health.sh` for why
+a `--resolve` to 127.0.0.1 now fails BY DESIGN under the origin lock.
 
 ```bash
 sudo systemctl status wanderer-health.timer
 journalctl -u wanderer-health.service -n 20
 ```
+
+⚠️ **`garmin_sync.py` still has `WANDERER_URL = "http://localhost:8090"` and is
+therefore BROKEN as of the cutover.** It fails safely — `synced_ids` is only
+updated after a trail is created, so nothing is lost and it retries — and it
+exits non-zero, so `OnFailure=garmin-sync-notify.service` does fire. But rides
+will not reach Wanderer until it is repointed at the cluster. Left unfixed
+deliberately rather than exposing PocketBase's admin API on the LAN; see
+ADR-154 for the options.
 
 ### Donetick (chore tracker)
 Self-hosted household chore/task manager at `https://todo.bradpenney.io`, standing in alongside the Nextcloud CalDAV chore workflow (better mobile experience, has a proper Android app). Single container, SQLite-backed. Config is a mounted file, not env vars — `donetick-config/selfhosted.yaml` (gitignored, holds the JWT secret) controls `jwt.secret`, `server.public_host`, and `server.cors_allow_origins`. Data lives in `donetick-data/` (gitignored).

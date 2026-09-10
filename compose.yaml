@@ -121,136 +121,25 @@ services:
       - "traefik.http.middlewares.nextcloud-caldav.redirectregex.replacement=https://$${1}/remote.php/dav/"
     restart: unless-stopped
 
-  wanderer-search:
-    container_name: wanderer-search
-    image: getmeili/meilisearch:v1.36.0
-    environment:
-      MEILI_NO_ANALYTICS: "true"
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
-    volumes:
-      - /home/brad/homelab/wanderer-search:/meili_data/data.ms:Z
-    networks:
-      - nextcloud
-    restart: unless-stopped
-    healthcheck:
-      test: curl --fail http://localhost:7700/health || exit 1
-      interval: 15s
-      retries: 10
-      start_period: 20s
-      timeout: 10s
+  # wanderer moved to the k0s cluster 2026-09-09 (ADR-153). Three services
+  # went with it -- wanderer (web), wanderer-db (PocketBase), wanderer-search
+  # (Meilisearch) -- served at the same hostname via the SNI passthrough in
+  # traefik-data/dynamic/k8s-passthrough.yml, now behind the origin lock.
+  #
+  # Its data lives on a Longhorn PV and is backed up by a CronJob in the
+  # cluster, not by backup.sh. The Meilisearch index was NOT migrated and did
+  # not need to be: PocketBase rebuilds it from data.db at startup (measured,
+  # ADR-151).
+  #
+  # The branding that used to be patched at runtime here is baked into the
+  # image at build time by the `trails` repo -- see
+  # substrate_config apps/wanderer/deployment-web.yaml for why that is better
+  # than a start-up patch that can silently match nothing.
 
-  wanderer-db:
-    container_name: wanderer-db
-    image: flomp/wanderer-db
-    depends_on:
-      wanderer-search:
-        condition: service_healthy
-    environment:
-      MEILI_URL: http://wanderer-search:7700
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
-      POCKETBASE_ENCRYPTION_KEY: ${POCKETBASE_ENCRYPTION_KEY}
-      ORIGIN: https://${WANDERER_DOMAIN}
-    ports:
-      - "127.0.0.1:8090:8090"
-    volumes:
-      - /home/brad/homelab/wanderer-db:/pb_data:Z
-    networks:
-      - nextcloud
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "/curl", "--fail", "http://localhost:8090/health"]
-      interval: 15s
-      retries: 10
-      start_period: 20s
-      timeout: 10s
-
-  wanderer:
-    container_name: wanderer
-    image: flomp/wanderer-web
-    depends_on:
-      wanderer-search:
-        condition: service_healthy
-      wanderer-db:
-        condition: service_healthy
-    environment:
-      MEILI_URL: http://wanderer-search:7700
-      MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
-      ORIGIN: https://${WANDERER_DOMAIN}
-      BODY_SIZE_LIMIT: Infinity
-      PUBLIC_POCKETBASE_URL: http://wanderer-db:8090
-      PUBLIC_DISABLE_SIGNUP: "true"
-      UPLOAD_FOLDER: /app/uploads
-      OVERPASS_API_URL: https://overpass-api.de
-      VALHALLA_URL: https://valhalla1.openstreetmap.de
-      NOMINATIM_URL: https://nominatim.openstreetmap.org
-    volumes:
-      - /home/brad/homelab/wanderer-uploads:/app/uploads:Z
-      - /home/brad/homelab/wanderer-branding:/wanderer-branding:ro
-    # Re-brand the stock Wanderer landing/UI to "Brad's Trails" on every start
-    # (patches the built JS before the node server reads it). Survives restarts
-    # and re-applies automatically after a Wanderer image update.
-    command: ["sh", "-c", "/wanderer-branding/patch-branding.sh; exec npm run start"]
-    networks:
-      - nextcloud
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.wanderer.rule=Host(`${WANDERER_DOMAIN}`)"
-      - "traefik.http.routers.wanderer.entrypoints=websecure"
-      - "traefik.http.routers.wanderer.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.wanderer.middlewares=wanderer-headers@docker,wanderer-compress@docker"
-      - "traefik.http.services.wanderer.loadbalancer.server.port=3000"
-      # The branding patch deletes Wanderer's precompressed .br/.gz assets so
-      # its in-place edits actually get served, which left every response
-      # (HTML, JS/CSS bundles, photo thumbnails) going out uncompressed.
-      # Compress on the fly at the proxy instead.
-      - "traefik.http.middlewares.wanderer-compress.compress=true"
-      # Wanderer-specific headers — referrer policy must allow cross-origin so
-      # Messenger's l.facebook.com redirect service can follow the link.
-      - "traefik.http.middlewares.wanderer-headers.headers.stsSeconds=31536000"
-      - "traefik.http.middlewares.wanderer-headers.headers.stsIncludeSubdomains=true"
-      - "traefik.http.middlewares.wanderer-headers.headers.stsPreload=true"
-      - "traefik.http.middlewares.wanderer-headers.headers.forceSTSHeader=true"
-      - "traefik.http.middlewares.wanderer-headers.headers.contentTypeNosniff=true"
-      - "traefik.http.middlewares.wanderer-headers.headers.browserXssFilter=true"
-      - "traefik.http.middlewares.wanderer-headers.headers.referrerPolicy=strict-origin-when-cross-origin"
-      - "traefik.http.middlewares.wanderer-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
-      # We rebrand by editing the built JS/CSS/image assets in place (same
-      # hashed filenames). Wanderer serves those as `immutable` for a year, so
-      # browsers would never pick up our edits. Cap caching at 5 minutes instead
-      # of the default 1yr immutable — bounds staleness after a future branding
-      # edit to one force-recreate + a short wait, while still letting repeat
-      # page views within a browsing session skip full revalidation round-trips.
-      - "traefik.http.middlewares.wanderer-headers.headers.customResponseHeaders.Cache-Control=max-age=300, must-revalidate"
-    restart: unless-stopped
-
-  donetick:
-    container_name: donetick
-    image: donetick/donetick
-    environment:
-      DT_ENV: selfhosted
-      DT_SQLITE_PATH: /donetick-data/donetick.db
-      TZ: America/Halifax
-    volumes:
-      - /home/brad/homelab/donetick-data:/donetick-data:Z
-      - /home/brad/homelab/donetick-config/selfhosted.yaml:/config/selfhosted.yaml:Z
-    networks:
-      - nextcloud
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.donetick.rule=Host(`${DONETICK_DOMAIN}`)"
-      - "traefik.http.routers.donetick.entrypoints=websecure"
-      - "traefik.http.routers.donetick.tls.certresolver=letsencrypt"
-      - "traefik.http.services.donetick.loadbalancer.server.port=2021"
-      - "traefik.http.routers.donetick.middlewares=donetick-headers"
-      - "traefik.http.middlewares.donetick-headers.headers.stsSeconds=31536000"
-      - "traefik.http.middlewares.donetick-headers.headers.stsIncludeSubdomains=true"
-      - "traefik.http.middlewares.donetick-headers.headers.stsPreload=true"
-      - "traefik.http.middlewares.donetick-headers.headers.forceSTSHeader=true"
-      - "traefik.http.middlewares.donetick-headers.headers.contentTypeNosniff=true"
-      - "traefik.http.middlewares.donetick-headers.headers.browserXssFilter=true"
-      - "traefik.http.middlewares.donetick-headers.headers.referrerPolicy=no-referrer"
-      - "traefik.http.middlewares.donetick-headers.headers.customResponseHeaders.X-Frame-Options=SAMEORIGIN"
-    restart: unless-stopped
+  # donetick moved to the k0s cluster 2026-09-06 (ADR-135). Served at the
+  # same hostname via the SNI passthrough in
+  # traefik-data/dynamic/k8s-passthrough.yml. Its data lives on a Longhorn
+  # PV and is backed up by a CronJob in the cluster, not by backup.sh.
 
 networks:
   nextcloud:
