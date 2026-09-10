@@ -18,8 +18,32 @@ traefik-data/
 
 # Timestamped .bak files from in-place edits. Git is the backup; a public repo
 # does not need six copies of an old script.
+#
+# ⚠️ THESE TWO PATTERNS HAD A HOLE, FOUND 2026-09-09.
+# `*.bak` matches only names ENDING in .bak, and `*.bak-*` needs a DASH. A file
+# named `.env.bak.2026-09-07` — a dot, not a dash — matched NEITHER, and it sat
+# untracked in this PUBLIC repository holding 14 credential lines. Nothing had
+# been committed (checked: only .env.example is in history), but a single
+# `git add -A` would have published every secret this stack uses.
+#
+# The `.env.*` rule below is the real fix: the patterns above are shape-matching
+# on a filename, and the thing worth protecting is the .env prefix.
 *.bak
 *.bak-*
+*.bak.*
+
+# Every variant of the environment file, however it is suffixed or dated.
+# .env.example is the deliberate exception — it is the documented template and
+# carries no values.
+.env.*
+!.env.example
+
+# Migration working copies. `migrate_wanderer.sh` and `migrate_donetick.sh` both
+# write a timestamped directory holding a full database snapshot and the
+# before/after row counts, and they are kept ON PURPOSE as rollback material.
+# They are real user data and must never be committed to a public repo.
+*-migration-*/
+*-migration-*.db
 nextcloud-data/
 nextcloud-config/
 nextcloud-db/

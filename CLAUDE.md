@@ -83,13 +83,22 @@ sudo systemctl status wanderer-health.timer
 journalctl -u wanderer-health.service -n 20
 ```
 
-⚠️ **`garmin_sync.py` still has `WANDERER_URL = "http://localhost:8090"` and is
-therefore BROKEN as of the cutover.** It fails safely — `synced_ids` is only
-updated after a trail is created, so nothing is lost and it retries — and it
-exits non-zero, so `OnFailure=garmin-sync-notify.service` does fire. But rides
-will not reach Wanderer until it is repointed at the cluster. Left unfixed
-deliberately rather than exposing PocketBase's admin API on the LAN; see
-ADR-154 for the options.
+⚠️ **`garmin_sync.py` here is SUPERSEDED and still points at the dead
+`localhost:8090`.** The sync moved into the cluster on 2026-09-09 (ADR-154):
+`source_code/garmin-sync` builds the image and
+`substrate_config/apps/wanderer/garmin-sync.yaml` runs it as a CronJob talking
+to `wanderer-db:8090` as a ClusterIP peer — so PocketBase gains no new exposure.
+
+**The host timer is deliberately still enabled** until the cluster job is proven
+end-to-end. A broken sync that alerts is better than two syncs racing for the
+same activity IDs. It fails safely in the meantime: `synced_ids` is only updated
+after a trail is created, so rides queue and retry rather than being lost, and
+it exits non-zero so `OnFailure=garmin-sync-notify.service` fires.
+
+Retire it — `sudo systemctl disable --now garmin-sync.timer` — only after the
+cluster job's first run reports "No new activities to sync", which is positive
+proof it read the seeded state. Full handoff in
+`~/notes/WHERE_TO_START_NEXT_SESSION.md` section B.
 
 ### Donetick (chore tracker)
 Self-hosted household chore/task manager at `https://todo.bradpenney.io`, standing in alongside the Nextcloud CalDAV chore workflow (better mobile experience, has a proper Android app). Single container, SQLite-backed. Config is a mounted file, not env vars — `donetick-config/selfhosted.yaml` (gitignored, holds the JWT secret) controls `jwt.secret`, `server.public_host`, and `server.cors_allow_origins`. Data lives in `donetick-data/` (gitignored).
