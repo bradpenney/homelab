@@ -23,9 +23,8 @@ Environment=POSTURE_CONTEXT=brad
 # So: NO linuxbrew on PATH. /usr/local/bin/kubectl is bin_t, and at v1.36.1 is
 # also closer to the cluster (v1.36.3) than linuxbrew's v1.35.1.
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-# And the SYSTEM interpreter, not substrate's .venv -- that venv is built on
-# linuxbrew's python, so systemd cannot exec it. This needs python3-pydantic
-# and python3-pyyaml installed as RPMs; posture-check.py reaches site.yml
-# through hosts.py -> siteconfig.py, which imports pydantic.
-ExecStart=/usr/bin/python3 /home/brad/notes/source_code/substrate/posture-check.py
+# A static musl binary in a bin_t path. Nothing under /home is executed
+# any more: no venv, no linuxbrew python, no RPM pydantic. The repo path is
+# only READ (site.yml, versions.yml).
+ExecStart=/usr/local/bin/substrate posture-check --repo /home/brad/notes/source_code/substrate
 TimeoutStartSec=300

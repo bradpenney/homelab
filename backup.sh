@@ -191,6 +191,15 @@ rclone --config "$RCLONE_CONFIG" copyto \
   "nextcloud-crypt:claude/gcal-credentials.json"
 sync_guarded "/home/brad/.claude/projects/-home-brad-notes/memory" "nextcloud-crypt:claude/memory"
 
+# OpenWolf's accumulated cross-session state: the bug log (126 entries), the
+# cerebrum (conventions and corrections), anatomy, and the session memory.
+# It is UNTRACKED in git — deliberately, but that means pushing the notes repo
+# protects none of it, and it is the one store here that cannot be reconstructed
+# from anywhere else. token-ledger.json is excluded: 11 MB of the 12 MB, pure
+# telemetry churn, rewritten constantly and worth nothing in a restore.
+sync_guarded "/home/brad/notes/.wolf" "nextcloud-crypt:claude/wolf" \
+  --exclude "token-ledger.json" --exclude "daemon.log" --exclude "*.bak"
+
 log "Backing up homelab secrets..."
 rclone --config "$RCLONE_CONFIG" copyto \
   "${HOMELAB_DIR}/.env" \
