@@ -46,12 +46,29 @@ if [[ ! "$CURRENT_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     exit 1
 fi
 
-ZONE_ID=$(curl -sf "${API}/zones?name=${ZONE_NAME}" "${AUTH[@]}" \
-    | python3 -c 'import sys,json; r=json.load(sys.stdin)["result"]; print(r[0]["id"] if r else "")')
+# A FAILED CALL MUST NEVER READ AS AN ANSWER (bug-216). `curl -sf` prints
+# nothing on a timeout or a 5xx; piped straight into json.load, one Cloudflare
+# blip on 2026-11-10 surfaced as a traceback and then as "no A record" — a
+# wrong diagnosis of a record that was there all along. Retry a few times, and
+# if it still fails, say the API failed, with curl's exit code. Logs go to
+# stderr so they never end up inside a captured response.
+cf_get() {
+    local path="$1" out rc=0 attempt
+    for attempt in 1 2 3; do
+        out=$(curl -sf --max-time 15 "${API}${path}" "${AUTH[@]}") && { printf '%s' "$out"; return 0; }
+        rc=$?
+        [[ $attempt -lt 3 ]] && sleep $((attempt * 5))
+    done
+    log "ERROR: Cloudflare API call failed 3 times (curl exit ${rc}; 22 = HTTP error, 28 = timeout): GET ${path%%\?*}" >&2
+    return 1
+}
+
+ZONE_JSON=$(cf_get "/zones?name=${ZONE_NAME}") || exit 1
+ZONE_ID=$(python3 -c 'import sys,json; r=json.load(sys.stdin)["result"]; print(r[0]["id"] if r else "")' <<<"$ZONE_JSON")
 [[ -n "$ZONE_ID" ]] || { log "ERROR: zone ${ZONE_NAME} not found (token scope?)"; exit 1; }
 
-read -r RECORD_ID LIVE_IP <<<"$(curl -sf "${API}/zones/${ZONE_ID}/dns_records?type=A&name=${RECORD_FQDN}" "${AUTH[@]}" \
-    | python3 -c 'import sys,json; r=json.load(sys.stdin)["result"]; print(r[0]["id"], r[0]["content"]) if r else print("", "")')"
+RECORD_JSON=$(cf_get "/zones/${ZONE_ID}/dns_records?type=A&name=${RECORD_FQDN}") || exit 1
+read -r RECORD_ID LIVE_IP <<<"$(python3 -c 'import sys,json; r=json.load(sys.stdin)["result"]; print(r[0]["id"], r[0]["content"]) if r else print("", "")' <<<"$RECORD_JSON")"
 
 if [[ -z "$RECORD_ID" ]]; then
     log "ERROR: no A record for ${RECORD_FQDN} in Cloudflare — refusing to create one blindly"
@@ -64,12 +81,13 @@ if [[ "$LIVE_IP" == "$CURRENT_IP" ]]; then
 fi
 
 log "IP drift detected: DNS says ${LIVE_IP}, we are ${CURRENT_IP} — updating"
-curl -sf -X PATCH "${API}/zones/${ZONE_ID}/dns_records/${RECORD_ID}" "${AUTH[@]}" \
-    -d "{\"content\":\"${CURRENT_IP}\"}" >/dev/null
+curl -sf --max-time 15 -X PATCH "${API}/zones/${ZONE_ID}/dns_records/${RECORD_ID}" "${AUTH[@]}" \
+    -d "{\"content\":\"${CURRENT_IP}\"}" >/dev/null \
+    || { log "ERROR: PATCH of ${RECORD_FQDN} failed (curl exit $?) — record still ${LIVE_IP}"; exit 1; }
 
 # VERIFY the change landed. Do not trust the API's 200.
-VERIFY=$(curl -sf "${API}/zones/${ZONE_ID}/dns_records/${RECORD_ID}" "${AUTH[@]}" \
-    | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["content"])')
+VERIFY_JSON=$(cf_get "/zones/${ZONE_ID}/dns_records/${RECORD_ID}") || exit 1
+VERIFY=$(python3 -c 'import sys,json; print(json.load(sys.stdin)["result"]["content"])' <<<"$VERIFY_JSON")
 if [[ "$VERIFY" != "$CURRENT_IP" ]]; then
     log "ERROR: update did NOT take effect — record still reads ${VERIFY}"
     exit 1
