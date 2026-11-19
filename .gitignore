@@ -61,3 +61,13 @@ hypervisor-kubeconfig.new
 
 # gh writes here if HOME is unset; not a credential, but machine-identifying
 .local/
+
+# Credential-shaped names that must never be committed, whatever directory they land in
+# (field note 06: protect the names you fear, then prove it with git check-ignore)
+kubeconfig
+*.kubeconfig
+id_ed25519*
+id_rsa*
+site.yml
+secrets.yaml
+*.tfstate*
